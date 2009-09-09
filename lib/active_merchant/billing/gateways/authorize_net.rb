@@ -102,22 +102,9 @@ module ActiveMerchant #:nodoc:
       # * <tt>options</tt> -- A hash of optional parameters.
       def purchase(money, creditcard_or_token, options = {})
         if creditcard_or_token.is_a?(String)
-          customer_profile_id, customer_payment_profile_id = creditcard_or_token.split('/')
-
-          cim_gateway.create_customer_profile_transaction(:transaction => {
-            :type => :auth_capture,
-            :amount => money.respond_to?(:cents) ? money.cents : money,
-            :customer_profile_id => customer_profile_id,
-            :customer_payment_profile_id => customer_payment_profile_id})
+          purchase_with_token(money, creditcard_or_token, options)
         else
-          post = {}
-          add_invoice(post, options)
-          add_creditcard(post, creditcard_or_token)
-          add_address(post, options)
-          add_customer_data(post, options)
-          add_duplicate_window(post)
-
-          commit('AUTH_CAPTURE', money, post)
+          purchase_with_credit_card(money, creditcard_or_token, options)
         end
       end
 
@@ -252,25 +239,21 @@ module ActiveMerchant #:nodoc:
       #
       # TODO
       def store(credit_card, options = {})
-        response = cim_gateway.create_customer_profile(:profile => {})
-        return response unless response.success?
-
-        customer_profile_id = response.authorization
-
-        response = cim_gateway.create_customer_payment_profile(
-          :customer_profile_id => customer_profile_id,
-          :payment_profile => {:payment => {:credit_card => credit_card}},
-          :validation_mode => 'none')
-
-        unless response.success?
-          delete_customer_profile(:customer_profile_id => customer_profile_id)
-          return response
+        profile = {:payment_profiles => {:payment => {:credit_card => credit_card}}}
+        profile[:payment_profiles][:bill_to] = options[:billing_address] if options[:billing_address]
+        profile[:ship_to_list] = options[:shipping_address] if options[:shipping_address]
+ 
+        # CIM actually does require a unique ID to be passed in,
+        # either merchant_customer_id or email, so generate it, if necessary
+        if options[:billing_id]
+          profile[:merchant_customer_id] = options[:billing_id]
+        elsif options[:email]
+          profile[:email] = options[:email]
+        else
+          profile[:merchant_customer_id] = Digest::SHA1.hexdigest("#{credit_card.number}#{Time.now.to_i}").first(20)
         end
-
-        customer_payment_profile_id = response.params['customer_payment_profile_id']
-      
-        Response.new(response.success?, response.message, response.params,
-                     :authorization => "#{customer_profile_id}/#{customer_payment_profile_id}")
+ 
+        cim_gateway.create_customer_profile(:profile => profile)
       end
 
       # Unstore previously stored credit card details.
@@ -279,8 +262,7 @@ module ActiveMerchant #:nodoc:
       #
       # *  <tt>token</tt> -- Authorization token returned by +store+ method.
       def unstore(token)
-        customer_profile_id, customer_payment_profile_id = token.split('/')
-        cim_gateway.delete_customer_profile(:customer_profile_id => customer_profile_id)
+        cim_gateway.delete_customer_profile(:customer_profile_id => token)
       end
 
       # Get the internal CIM (Customer Information Manager) gateway. This gateway implements the
@@ -292,6 +274,31 @@ module ActiveMerchant #:nodoc:
 
       private
       
+      def purchase_with_credit_card(money, creditcard, options)
+        post = {}
+        add_invoice(post, options)
+        add_creditcard(post, creditcard)
+        add_address(post, options)
+        add_customer_data(post, options)
+        add_duplicate_window(post)
+
+        commit('AUTH_CAPTURE', money, post)
+      end
+
+      def purchase_with_token(money, token, options)
+        response = cim_gateway.get_customer_profile(:customer_profile_id => token)
+
+        if response.success?
+          cim_gateway.create_customer_profile_transaction(:transaction => {
+            :customer_profile_id => token,
+            :customer_payment_profile_id => response.params['profile']['payment_profiles']['customer_payment_profile_id'],
+            :type => :auth_capture,
+            :amount => amount(money)})
+        else
+          response
+        end
+      end
+
       def commit(action, money, parameters)
         parameters[:amount] = amount(money) unless action == 'VOID'
 

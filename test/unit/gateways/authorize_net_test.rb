@@ -30,17 +30,26 @@ class AuthorizeNetTest < Test::Unit::TestCase
   end
 
   def test_successful_purchase_with_token
+    get_customer_profile_response = stub('get_customer_profile response',
+      :success? => true,
+      :params => {
+        'profile' => {
+          'payment_profiles' => {'customer_payment_profile_id' => '5678'}}})
+
     create_customer_profile_transaction_response =
       stub('create_customer_profile_transaction response')
 
+    @gateway.cim_gateway.expects(:get_customer_profile).with(:customer_profile_id => '1234').
+      returns(get_customer_profile_response)
+
     @gateway.cim_gateway.expects(:create_customer_profile_transaction).
       with(:transaction => {:type => :auth_capture,
-                            :amount => @amount,
+                            :amount => '1.00',
                             :customer_profile_id => '1234',
                             :customer_payment_profile_id => '5678'}).
       returns(create_customer_profile_transaction_response)
 
-    assert response = @gateway.purchase(@amount, '1234/5678')
+    assert response = @gateway.purchase(100, '1234')
     assert_equal create_customer_profile_transaction_response, response
   end
 
@@ -50,31 +59,41 @@ class AuthorizeNetTest < Test::Unit::TestCase
     assert_equal @gateway.options[:password], @gateway.cim_gateway.options[:password]
   end
 
-  def test_successful_store
-    cim_operations = sequence('CIM operations')
-    
-    create_customer_profile_response = stub('create_customer_profile response',
-                                            :success? => true, :authorization => '1234')
-
-    create_customer_payment_profile_response = stub('create_customer_payment_profile response',
-      :success? => true, :message => 'Successful.',
-      :params => {'customer_payment_profile_id' => '5678'})
+  def test_successful_store_with_billing_id
+    create_customer_profile_response = stub('create_customer_profile response')
 
     @gateway.cim_gateway.expects(:create_customer_profile).
-      with(:profile => {}).
-      returns(create_customer_profile_response).
-      in_sequence(cim_operations)
+      with(:profile => {:merchant_customer_id => '1234',
+                        :payment_profiles => {:payment => {:credit_card => @credit_card}}}).
+      returns(create_customer_profile_response)
 
-    @gateway.cim_gateway.expects(:create_customer_payment_profile).
-      with(:customer_profile_id => '1234',
-           :payment_profile => {:payment => {:credit_card => @credit_card}},
-           :validation_mode => 'none').
-      returns(create_customer_payment_profile_response).
-      in_sequence(cim_operations)
+    assert response = @gateway.store(@credit_card, :billing_id => '1234')
+    assert_equal create_customer_profile_response, response
+  end
+
+  def test_successful_store_with_email
+    create_customer_profile_response = stub('create_customer_profile response')
+
+    @gateway.cim_gateway.expects(:create_customer_profile).
+      with(:profile => {:email => 'monkey@example.com',
+                        :payment_profiles => {:payment => {:credit_card => @credit_card}}}).
+      returns(create_customer_profile_response)
+
+    assert response = @gateway.store(@credit_card, :email => 'monkey@example.com')
+    assert_equal create_customer_profile_response, response
+  end
+
+  def test_successful_store_without_billing_id_or_email
+    Digest::SHA1.expects(:hexdigest).with(includes(@credit_card.number)).returns('1234')
+    create_customer_profile_response = stub('create_customer_profile response')
+
+    @gateway.cim_gateway.expects(:create_customer_profile).
+      with(:profile => {:merchant_customer_id => '1234',
+                        :payment_profiles => {:payment => {:credit_card => @credit_card}}}).
+      returns(create_customer_profile_response)
 
     assert response = @gateway.store(@credit_card)
-    assert_success response
-    assert_equal '1234/5678', response.authorization
+    assert_equal create_customer_profile_response, response
   end
 
   def test_successful_unstore
@@ -84,7 +103,7 @@ class AuthorizeNetTest < Test::Unit::TestCase
       with(:customer_profile_id => '1234').
       returns(delete_customer_profile_response)
 
-    assert response = @gateway.unstore('1234/5678')
+    assert response = @gateway.unstore('1234')
     assert_equal response, delete_customer_profile_response
   end
   

@@ -20,13 +20,59 @@ class AuthorizeNetTest < Test::Unit::TestCase
     assert_equal '508141794', response.authorization
   end
   
-  def test_successful_purchase
+  def test_successful_purchase_with_credit_card
     @gateway.expects(:ssl_post).returns(successful_purchase_response)
   
     assert response = @gateway.purchase(@amount, @credit_card)
     assert_instance_of Response, response
     assert_success response
     assert_equal '508141795', response.authorization
+  end
+
+  def test_cim_gateway
+    assert_instance_of AuthorizeNetCimGateway, @gateway.cim_gateway
+    assert_equal @gateway.options[:login], @gateway.cim_gateway.options[:login]
+    assert_equal @gateway.options[:password], @gateway.cim_gateway.options[:password]
+  end
+
+  def test_successful_store
+    cim_operations = sequence('CIM operations')
+    
+    create_customer_profile_response = stub('create_customer_profile response',
+                                            :success? => true, :authorization => '1234')
+
+    create_customer_payment_profile_response = stub('create_customer_payment_profile response',
+      :success? => true, :message => 'Successful.',
+      :params => {'customer_payment_profile_id' => '5678'})
+
+    @gateway.cim_gateway.expects(:create_customer_profile).
+      with(:profile => {}).
+      returns(create_customer_profile_response).
+      in_sequence(cim_operations)
+
+    @gateway.cim_gateway.expects(:create_customer_payment_profile).
+      with(:customer_profile_id => '1234',
+           :payment_profile => {:payment => {:credit_card => @credit_card}},
+           :validation_mode => 'none').
+      returns(create_customer_payment_profile_response).
+      in_sequence(cim_operations)
+
+    assert response = @gateway.store(@credit_card)
+    assert_success response
+    assert_equal '1234/5678', response.authorization
+  end
+
+  def test_successful_unstore
+    delete_customer_profile_response = stub('delete_customer_profile response',
+                                            :success? => true)
+
+    @gateway.cim_gateway.expects(:delete_customer_profile).
+      with(:customer_profile_id => '1234').
+      returns(delete_customer_profile_response)
+
+    assert response = @gateway.unstore('1234/5678')
+    assert_success response
+    assert_equal response, delete_customer_profile_response
   end
   
   def test_failed_authorization

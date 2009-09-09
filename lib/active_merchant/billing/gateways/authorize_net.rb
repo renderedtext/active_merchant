@@ -227,6 +227,59 @@ module ActiveMerchant #:nodoc:
         recurring_commit(:cancel, request)
       end
 
+      # Store credit card details.
+      #
+      # Your merchant account must have CIM enabled. This operation returns authorization
+      # token (in the +authorization+ field of the Response), which can be used in subsequent
+      # operations (authorize, capture, purchase, ...) in place of CreditCard details.
+      #
+      # ==== Parameters
+      #
+      # *  <tt>credit_card</tt> -- The CreditCard details to be stored.
+      # *  <tt>options</tt> -- A hash of parameters
+      #
+      # ==== Options
+      #
+      # TODO
+      def store(credit_card, options = {})
+        response = cim_gateway.create_customer_profile(:profile => {})
+        return response unless response.success?
+
+        customer_profile_id = response.authorization
+
+        response = cim_gateway.create_customer_payment_profile(
+          :customer_profile_id => customer_profile_id,
+          :payment_profile => {:payment => {:credit_card => credit_card}},
+          :validation_mode => 'none')
+
+        unless response.success?
+          delete_customer_profile(:customer_profile_id => customer_profile_id)
+          return response
+        end
+
+        customer_payment_profile_id = response.params['customer_payment_profile_id']
+      
+        Response.new(response.success?, response.message, response.params,
+                     :authorization => "#{customer_profile_id}/#{customer_payment_profile_id}")
+      end
+
+      # Unstore previously stored credit card details.
+      #
+      # ==== Parameters
+      #
+      # *  <tt>token</tt> -- Authorization token returned by +store+ method.
+      def unstore(token)
+        customer_profile_id, customer_payment_profile_id = token.split('/')
+        cim_gateway.delete_customer_profile(:customer_profile_id => customer_profile_id)
+      end
+
+      # Get the internal CIM (Customer Information Manager) gateway. This gateway implements the
+      # low level operations for storing/unstoring credit cards and executing transaction using
+      # stored credit cards.
+      def cim_gateway
+        @cim_gateway ||= AuthorizeNetCimGateway.new(options)
+      end
+
       private
       
       def commit(action, money, parameters)

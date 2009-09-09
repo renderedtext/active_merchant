@@ -29,6 +29,21 @@ class AuthorizeNetTest < Test::Unit::TestCase
     assert_equal '508141795', response.authorization
   end
 
+  def test_successful_purchase_with_token
+    create_customer_profile_transaction_response =
+      stub('create_customer_profile_transaction response')
+
+    @gateway.cim_gateway.expects(:create_customer_profile_transaction).
+      with(:transaction => {:type => :auth_capture,
+                            :amount => @amount,
+                            :customer_profile_id => '1234',
+                            :customer_payment_profile_id => '5678'}).
+      returns(create_customer_profile_transaction_response)
+
+    assert response = @gateway.purchase(@amount, '1234/5678')
+    assert_equal create_customer_profile_transaction_response, response
+  end
+
   def test_cim_gateway
     assert_instance_of AuthorizeNetCimGateway, @gateway.cim_gateway
     assert_equal @gateway.options[:login], @gateway.cim_gateway.options[:login]
@@ -63,15 +78,13 @@ class AuthorizeNetTest < Test::Unit::TestCase
   end
 
   def test_successful_unstore
-    delete_customer_profile_response = stub('delete_customer_profile response',
-                                            :success? => true)
+    delete_customer_profile_response = stub('delete_customer_profile response')
 
     @gateway.cim_gateway.expects(:delete_customer_profile).
       with(:customer_profile_id => '1234').
       returns(delete_customer_profile_response)
 
     assert response = @gateway.unstore('1234/5678')
-    assert_success response
     assert_equal response, delete_customer_profile_response
   end
   

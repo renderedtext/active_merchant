@@ -98,17 +98,27 @@ module ActiveMerchant #:nodoc:
       # ==== Parameters
       #
       # * <tt>money</tt> -- The amount to be purchased. Either an Integer value in cents or a Money object.
-      # * <tt>creditcard</tt> -- The CreditCard details for the transaction.
+      # * <tt>creditcard</tt> -- Either the CreditCard details for the transaction or the authorization token returned by previous +store+ call (only for CIM enabled accounts).
       # * <tt>options</tt> -- A hash of optional parameters.
-      def purchase(money, creditcard, options = {})
-        post = {}
-        add_invoice(post, options)
-        add_creditcard(post, creditcard)
-        add_address(post, options)
-        add_customer_data(post, options)
-        add_duplicate_window(post)
+      def purchase(money, creditcard_or_token, options = {})
+        if creditcard_or_token.is_a?(String)
+          customer_profile_id, customer_payment_profile_id = creditcard_or_token.split('/')
 
-        commit('AUTH_CAPTURE', money, post)
+          cim_gateway.create_customer_profile_transaction(:transaction => {
+            :type => :auth_capture,
+            :amount => money.respond_to?(:cents) ? money.cents : money,
+            :customer_profile_id => customer_profile_id,
+            :customer_payment_profile_id => customer_payment_profile_id})
+        else
+          post = {}
+          add_invoice(post, options)
+          add_creditcard(post, creditcard_or_token)
+          add_address(post, options)
+          add_customer_data(post, options)
+          add_duplicate_window(post)
+
+          commit('AUTH_CAPTURE', money, post)
+        end
       end
 
       # Captures the funds from an authorized transaction.

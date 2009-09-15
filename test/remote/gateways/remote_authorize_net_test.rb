@@ -27,6 +27,35 @@ class AuthorizeNetTest < Test::Unit::TestCase
         :occurrences => 1
       }
     }
+
+    @invalid_token = '123456'
+  end
+
+  def test_successful_store
+    assert response = @gateway.store(@credit_card)
+    assert_success response
+    assert response.authorization
+  end
+
+  def test_successful_store_and_purchase_with_token
+    assert store_response = @gateway.store(@credit_card)
+    assert_success store_response
+
+    assert purchase_response = @gateway.purchase(@amount, store_response.authorization)
+    assert_success purchase_response
+  end
+
+  def test_unsuccessful_purchase_with_token
+    assert response = @gateway.purchase(@amount, @invalid_token)
+    assert_failure response
+  end
+
+  def test_successful_store_and_unstore
+    assert store_response = @gateway.store(@credit_card)
+    assert_success store_response
+
+    assert unstore_response = @gateway.unstore(store_response.authorization)
+    assert_success unstore_response
   end
   
   def test_successful_purchase

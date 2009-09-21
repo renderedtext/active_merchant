@@ -2,10 +2,10 @@ require 'test_helper'
 
 class AuthorizeNetCimTest < Test::Unit::TestCase
   def setup
-    @gateway = AuthorizeNetCimGateway.new(
-      :login => 'X',
-      :password => 'Y'
-    )
+    Base.mode = :test
+
+    @credentials = {:login => 'X', :password => 'Y'}
+    @gateway = AuthorizeNetCimGateway.new(@credentials)
     @amount = 100
     @credit_card = credit_card
     @address = address
@@ -285,6 +285,19 @@ class AuthorizeNetCimTest < Test::Unit::TestCase
     assert_success response
     assert_nil response.authorization
     assert_equal 'This transaction has been approved.', response.params['direct_response']['message']
+  end
+
+  def test_production_mode
+    Base.mode = :production
+    gateway = AuthorizeNetCimGateway.new(@credentials)
+    assert !gateway.test?
+  end
+
+  def test_test_mode
+    Base.mode = :production
+    @credentials[:test] = true
+    gateway = AuthorizeNetCimGateway.new(@credentials)
+    assert gateway.test?
   end
 
   private

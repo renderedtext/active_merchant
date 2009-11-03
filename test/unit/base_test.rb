@@ -51,4 +51,5 @@ class BaseTest < Test::Unit::TestCase
     Base.gateway_mode = :production
     assert_false Base.test?
   end
+
 end

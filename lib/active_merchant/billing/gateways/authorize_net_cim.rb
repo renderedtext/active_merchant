@@ -339,10 +339,6 @@ module ActiveMerchant #:nodoc:
         commit(:validate_customer_payment_profile, request)
       end
 
-      def test?
-        options[:test] || super
-      end
-
       private
 
       def expdate(credit_card)

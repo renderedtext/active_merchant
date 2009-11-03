@@ -265,10 +265,6 @@ module ActiveMerchant #:nodoc:
         cim_gateway.delete_customer_profile(:customer_profile_id => token)
       end
 
-      def test?
-        options[:test] || super
-      end
-
       # Get the internal CIM (Customer Information Manager) gateway. This gateway implements the
       # low level operations for storing/unstoring credit cards and executing transaction using
       # stored credit cards.

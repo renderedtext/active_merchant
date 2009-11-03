@@ -2,10 +2,10 @@ require 'test_helper'
 
 class AuthorizeNetTest < Test::Unit::TestCase
   def setup
-    Base.mode = :test
-
-    @credentials = {:login => 'X', :password => 'Y'}
-    @gateway = AuthorizeNetGateway.new(@credentials)
+    @gateway = AuthorizeNetGateway.new(
+      :login => 'X',
+      :password => 'Y'
+    )
     @amount = 100
     @credit_card = credit_card
     @subscription_id = '100748'
@@ -287,19 +287,6 @@ class AuthorizeNetTest < Test::Unit::TestCase
   def test_expdate_formatting
     assert_equal '2009-09', @gateway.send(:arb_expdate, credit_card('4111111111111111', :month => "9", :year => "2009"))
     assert_equal '2013-11', @gateway.send(:arb_expdate, credit_card('4111111111111111', :month => "11", :year => "2013"))
-  end
-
-  def test_production_mode
-    Base.mode = :production
-    gateway = AuthorizeNetGateway.new(@credentials)
-    assert !gateway.test?
-  end
-
-  def test_test_mode
-    Base.mode = :production
-    @credentials[:test] = true
-    gateway = AuthorizeNetGateway.new(@credentials)
-    assert gateway.test?
   end
 
   private

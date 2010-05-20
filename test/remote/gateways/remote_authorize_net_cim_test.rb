@@ -461,7 +461,7 @@ class AuthorizeNetCimTest < Test::Unit::TestCase
   def test_should_create_customer_profile_transaction_auth_capture_and_then_void_request
     response = get_and_validate_auth_capture_response
 
-    assert response = @gateway.create_customer_profile_transaction_for_void(
+    assert response = @gateway.create_customer_profile_transaction(
       :transaction => {
         :type => :void,
         :trans_id => response.params['direct_response']['transaction_id']

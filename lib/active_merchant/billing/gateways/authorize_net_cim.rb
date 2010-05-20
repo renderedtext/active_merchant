@@ -302,7 +302,7 @@ module ActiveMerchant #:nodoc:
 
       # Creates a new payment transaction from an existing customer profile
       #
-      # This is what is used to charge a customer whose information you have stored in a Customer Profile.
+      # This is what is used to charge, authorize, void, or refund a customer whose information you have stored in a Customer Profile.
       # 
       # Returns a Response object that contains the result of the transaction in <tt>params['direct_response']</tt>
       #
@@ -357,60 +357,6 @@ module ActiveMerchant #:nodoc:
           else
             requires!(options[:transaction], :amount, :customer_profile_id, :customer_payment_profile_id)
         end
-        request = build_request(:create_customer_profile_transaction, options)
-        commit(:create_customer_profile_transaction, request)
-      end
-
-      # Creates a new payment transaction for refund from an existing customer profile
-      #
-      # This is what is used to refund a transaction you have stored in a Customer Profile.
-      #
-      # Returns a Response object that contains the result of the transaction in <tt>params['direct_response']</tt>
-      #
-      # ==== Options
-      #
-      # * <tt>:transaction</tt> -- A hash containing information on the transaction that is being requested. (REQUIRED)
-      #
-      # ==== Transaction
-      #
-      # * <tt>:amount</tt> -- The total amount to be refunded (REQUIRED)
-      #
-      # * <tt>:customer_profile_id</tt> -- The Customer Profile ID of the customer to use in this transaction. (CONDITIONAL :customer_payment_profile_id must be included if used)
-      # * <tt>:customer_payment_profile_id</tt> -- The Customer Payment Profile ID of the Customer Payment Profile to use in this transaction. (CONDITIONAL :customer_profile_id must be included if used)
-      #
-      # * <tt>:credit_card_number_masked</tt> -- Four Xs follwed by the last four digits of the credit card (CONDITIONAL - used if customer_profile_id and customer_payment_profile_id aren't given)
-      #
-      # * <tt>:bank_routing_number_masked</tt> -- The last four gidits of the routing number to be refunded (CONDITIONAL - must be used with :bank_account_number_masked)
-      # * <tt>:bank_account_number_masked</tt> -- The last four digis of the bank account number to be refunded, Ex. XXXX1234 (CONDITIONAL - must be used with :bank_routing_number_masked)
-      def create_customer_profile_transaction_for_refund(options)
-        requires!(options, :transaction)
-        options[:transaction][:type] = :refund
-        requires!(options[:transaction], :trans_id)
-        requires!(options[:transaction], :amount)
-        request = build_request(:create_customer_profile_transaction, options)
-        commit(:create_customer_profile_transaction, request)
-      end
-
-      # Creates a new payment transaction for void from an existing customer profile
-      #
-      # This is what is used to void a transaction you have stored in a Customer Profile.
-      #
-      # Returns a Response object that contains the result of the transaction in <tt>params['direct_response']</tt>
-      #
-      # ==== Options
-      #
-      # * <tt>:transaction</tt> -- A hash containing information on the transaction that is being requested. (REQUIRED)
-      #
-      # ==== Transaction
-      #
-      # * <tt>:trans_id</tt> -- The payment gateway assigned transaction id of the original transaction. (REQUIRED)
-      # * <tt>:customer_profile_id</tt> -- The Customer Profile ID of the customer to use in this transaction.
-      # * <tt>:customer_payment_profile_id</tt> -- The Customer Payment Profile ID of the Customer Payment Profile to use in this transaction.
-      # * <tt>:customer_shipping_address_id</tt> -- Payment gateway assigned ID associated with the customer shipping address.
-      def create_customer_profile_transaction_for_void(options)
-        requires!(options, :transaction)
-        options[:transaction][:type] = :void
-        requires!(options[:transaction], :trans_id)
         request = build_request(:create_customer_profile_transaction, options)
         commit(:create_customer_profile_transaction, request)
       end

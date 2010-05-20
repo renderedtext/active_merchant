@@ -325,13 +325,14 @@ class AuthorizeNetCimTest < Test::Unit::TestCase
     assert_equal 'This transaction has been approved.', response.params['direct_response']['message']
   end
 
-  def test_should_create_customer_profile_transaction_for_void_request
+  def test_should_create_customer_profile_transaction_void_request
     @gateway.expects(:ssl_post).returns(successful_create_customer_profile_transaction_response(:void))
 
-    assert response = @gateway.create_customer_profile_transaction_for_void(
+    assert response = @gateway.create_customer_profile_transaction(
       :transaction => {
+        :type => :void,
         :trans_id => 1
-        }
+      }
     )
     assert_instance_of Response, response
     assert_success response
@@ -339,15 +340,16 @@ class AuthorizeNetCimTest < Test::Unit::TestCase
     assert_equal 'This transaction has been approved.', response.params['direct_response']['message']
   end
 
-  def test_should_create_customer_profile_transaction_for_refund_request
+  def test_should_create_customer_profile_transaction_refund_request
     @gateway.expects(:ssl_post).returns(successful_create_customer_profile_transaction_response(:refund))
 
-    assert response = @gateway.create_customer_profile_transaction_for_refund(
+    assert response = @gateway.create_customer_profile_transaction(
       :transaction => {
+        :type => :refund,
         :trans_id => 1,
         :amount => "1.00",
         :credit_card_number_masked => "XXXX1234"
-        }
+      }
     )
     assert_instance_of Response, response
     assert_success response

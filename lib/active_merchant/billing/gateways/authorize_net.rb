@@ -98,17 +98,14 @@ module ActiveMerchant #:nodoc:
       # ==== Parameters
       #
       # * <tt>money</tt> -- The amount to be purchased as an Integer value in cents.
-      # * <tt>creditcard</tt> -- The CreditCard details for the transaction.
+      # * <tt>creditcard</tt> -- Either the CreditCard details for the transaction or the authorization token returned by previous +store+ call (only for CIM enabled accounts).
       # * <tt>options</tt> -- A hash of optional parameters.
-      def purchase(money, creditcard, options = {})
-        post = {}
-        add_invoice(post, options)
-        add_creditcard(post, creditcard)
-        add_address(post, options)
-        add_customer_data(post, options)
-        add_duplicate_window(post)
-
-        commit('AUTH_CAPTURE', money, post)
+      def purchase(money, creditcard_or_token, options = {})
+        if creditcard_or_token.is_a?(String)
+          purchase_with_token(money, creditcard_or_token, options)
+        else
+          purchase_with_credit_card(money, creditcard_or_token, options)
+        end
       end
 
       # Captures the funds from an authorized transaction.
@@ -226,8 +223,81 @@ module ActiveMerchant #:nodoc:
         recurring_commit(:cancel, request)
       end
 
+      # Store credit card details.
+      #
+      # Your merchant account must have CIM enabled. This operation returns authorization
+      # token (in the +authorization+ field of the Response), which can be used in subsequent
+      # operations (authorize, capture, purchase, ...) in place of CreditCard details.
+      #
+      # ==== Parameters
+      #
+      # *  <tt>credit_card</tt> -- The CreditCard details to be stored.
+      # *  <tt>options</tt> -- A hash of parameters
+      #
+      # ==== Options
+      #
+      # TODO
+      def store(credit_card, options = {})
+        profile = {:payment_profiles => {:payment => {:credit_card => credit_card}}}
+        profile[:payment_profiles][:bill_to] = options[:billing_address] if options[:billing_address]
+        profile[:ship_to_list] = options[:shipping_address] if options[:shipping_address]
+ 
+        # CIM actually does require a unique ID to be passed in,
+        # either merchant_customer_id or email, so generate it, if necessary
+        if options[:billing_id]
+          profile[:merchant_customer_id] = options[:billing_id]
+        elsif options[:email]
+          profile[:email] = options[:email]
+        else
+          profile[:merchant_customer_id] = Digest::SHA1.hexdigest("#{credit_card.number}#{Time.now.to_i}").first(20)
+        end
+ 
+        cim_gateway.create_customer_profile(:profile => profile)
+      end
+
+      # Unstore previously stored credit card details.
+      #
+      # ==== Parameters
+      #
+      # *  <tt>token</tt> -- Authorization token returned by +store+ method.
+      def unstore(token)
+        cim_gateway.delete_customer_profile(:customer_profile_id => token)
+      end
+
+      # Get the internal CIM (Customer Information Manager) gateway. This gateway implements the
+      # low level operations for storing/unstoring credit cards and executing transaction using
+      # stored credit cards.
+      def cim_gateway
+        @cim_gateway ||= AuthorizeNetCimGateway.new(options)
+      end
+
       private
       
+      def purchase_with_credit_card(money, creditcard, options)
+        post = {}
+        add_invoice(post, options)
+        add_creditcard(post, creditcard)
+        add_address(post, options)
+        add_customer_data(post, options)
+        add_duplicate_window(post)
+
+        commit('AUTH_CAPTURE', money, post)
+      end
+
+      def purchase_with_token(money, token, options)
+        response = cim_gateway.get_customer_profile(:customer_profile_id => token)
+
+        if response.success?
+          cim_gateway.create_customer_profile_transaction(:transaction => {
+            :customer_profile_id => token,
+            :customer_payment_profile_id => response.params['profile']['payment_profiles']['customer_payment_profile_id'],
+            :type => :auth_capture,
+            :amount => amount(money)})
+        else
+          response
+        end
+      end
+
       def commit(action, money, parameters)
         parameters[:amount] = amount(money) unless action == 'VOID'
 
